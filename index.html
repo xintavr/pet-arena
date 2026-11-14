@@ -1,0 +1,1833 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Арена Питомцев — Telegram Mini App</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg-main: #0d1117;
+    --bg-card: #161b22;
+    --bg-panel: #21262d;
+    --text-main: #f0f6fc;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --danger: #f85149;
+    --success: #2ea043;
+    --warning: #d29922;
+    /* Rarity colors */
+    --r-common: #8b949e;
+    --r-rare: #388bfd;
+    --r-epic: #a371f7;
+    --r-legendary: #f0883e;
+    --r-mythic: #ff3860;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, sans-serif;
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  /* TOP BAR */
+  .top-bar {
+    background: var(--bg-card);
+    padding: 10px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #30363d;
+    z-index: 10;
+  }
+  .player-info { display: flex; align-items: center; gap: 10px; }
+  .avatar-circle {
+    width: 38px; height: 38px; border-radius: 50%;
+    background: linear-gradient(135deg, #388bfd, #a371f7);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 16px; border: 2px solid var(--accent);
+  }
+  .player-meta h4 { font-size: 14px; display: flex; align-items: center; gap: 6px; }
+  .lvl-badge { background: var(--accent); color: #000; font-size: 11px; padding: 1px 6px; border-radius: 8px; font-weight: 700; }
+  .elo-text { font-size: 12px; color: var(--warning); font-weight: 600; }
+  .currencies { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .curr-pill {
+    background: var(--bg-panel);
+    padding: 4px 8px; border-radius: 10px;
+    font-size: 12px; font-weight: 700;
+    display: flex; align-items: center; gap: 4px;
+    border: 1px solid #30363d;
+  }
+  /* MAIN CONTENT AREA */
+  .content-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    padding-bottom: 80px;
+  }
+  .tab-view { display: none; animation: fadeIn 0.2s ease; }
+  .tab-view.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* SUB-TABS */
+  .sub-nav {
+    display: flex; gap: 6px; margin-bottom: 12px;
+    background: var(--bg-card); padding: 4px; border-radius: 10px;
+    border: 1px solid #30363d;
+  }
+  .sub-btn {
+    flex: 1; padding: 8px 4px; text-align: center;
+    font-size: 12px; font-weight: 600; color: var(--text-muted);
+    background: transparent; border: none; border-radius: 8px; cursor: pointer;
+  }
+  .sub-btn.active { background: var(--bg-panel); color: var(--text-main); box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+
+  /* CARDS & GRIDS */
+  .pet-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .pet-card {
+    background: var(--bg-card);
+    border-radius: 12px; padding: 10px;
+    border: 2px solid #30363d;
+    position: relative; cursor: pointer;
+    transition: transform 0.1s;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .pet-card:active { transform: scale(0.97); }
+  .pet-card.r-common { border-color: var(--r-common); }
+  .pet-card.r-rare { border-color: var(--r-rare); }
+  .pet-card.r-epic { border-color: var(--r-epic); }
+  .pet-card.r-legendary { border-color: var(--r-legendary); box-shadow: 0 0 10px rgba(240,136,62,0.2); }
+  .pet-card.r-mythic { border-color: var(--r-mythic); box-shadow: 0 0 12px rgba(255,56,96,0.35); }
+
+  .team-badge {
+    position: absolute; top: 6px; left: 6px;
+    background: var(--success); color: #fff;
+    font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 6px;
+  }
+  .elem-badge {
+    position: absolute; top: 6px; right: 6px;
+    font-size: 15px; background: var(--bg-panel);
+    width: 26px; height: 26px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .pet-sprite {
+    font-size: 46px; margin: 12px 0 6px;
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
+  }
+  .pet-name { font-size: 14px; font-weight: 700; text-align: center; }
+  .pet-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .stat-mini {
+    display: flex; gap: 8px; font-size: 11px; margin-top: 8px;
+    background: var(--bg-panel); padding: 4px 8px; border-radius: 6px; width: 100%; justify-content: space-around;
+  }
+
+  /* BUTTONS */
+  .btn {
+    background: var(--accent); color: #000;
+    border: none; padding: 10px 14px; border-radius: 10px;
+    font-weight: 700; font-size: 13px; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    width: 100%; transition: opacity 0.15s;
+  }
+  .btn:disabled { opacity: 0.4; pointer-events: none; }
+  .btn-success { background: var(--success); color: #fff; }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-warning { background: var(--warning); color: #000; }
+  .btn-outline { background: var(--bg-panel); color: var(--text-main); border: 1px solid #30363d; }
+
+  /* BOTTOM NAV */
+  .bottom-nav {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: var(--bg-card);
+    border-top: 1px solid #30363d;
+    display: flex; justify-content: space-around;
+    padding: 6px 0 calc(6px + env(safe-area-inset-bottom));
+    z-index: 20;
+  }
+  .nav-item {
+    background: none; border: none; color: var(--text-muted);
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    font-size: 10px; font-weight: 600; cursor: pointer; flex: 1;
+  }
+  .nav-item .icon { font-size: 20px; }
+  .nav-item.active { color: var(--accent); }
+
+  /* MODAL */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.78);
+    display: none; align-items: center; justify-content: center;
+    padding: 16px; z-index: 50;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: var(--bg-card); border: 1px solid #30363d;
+    border-radius: 16px; width: 100%; max-width: 420px;
+    max-height: 88vh; overflow-y: auto; padding: 16px;
+    position: relative;
+  }
+  .modal-close {
+    position: absolute; top: 12px; right: 12px;
+    background: var(--bg-panel); border: none; color: var(--text-main);
+    width: 30px; height: 30px; border-radius: 50%; font-size: 16px; cursor: pointer;
+  }
+
+  /* BATTLE SCREEN OVERLAY */
+  .battle-screen {
+    position: fixed; inset: 0; background: radial-gradient(circle at center, #1b2432 0%, #090d16 100%);
+    z-index: 100; display: none; flex-direction: column; justify-content: space-between;
+    padding: 12px;
+  }
+  .battle-screen.active { display: flex; }
+  .b-hud {
+    background: rgba(22, 27, 34, 0.88); border: 1px solid #30363d;
+    border-radius: 12px; padding: 10px;
+  }
+  .b-header { display: flex; justify-content: space-between; align-items: center; font-size: 12px; margin-bottom: 6px; }
+  .team-balls { display: flex; gap: 4px; }
+  .ball { width: 10px; height: 10px; border-radius: 50%; background: var(--success); }
+  .ball.dead { background: var(--danger); opacity: 0.4; }
+  .hp-bar-wrap {
+    width: 100%; height: 14px; background: #0d1117;
+    border-radius: 7px; overflow: hidden; position: relative; border: 1px solid #30363d;
+  }
+  .hp-bar-fill {
+    height: 100%; background: linear-gradient(90deg, #2ea043, #56d364);
+    transition: width 0.35s ease;
+  }
+  .hp-bar-text {
+    position: absolute; inset: 0; font-size: 10px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center; text-shadow: 0 1px 2px #000;
+  }
+  .b-arena-center {
+    flex: 1; display: flex; flex-direction: column; justify-content: space-around;
+    align-items: center; position: relative; my: 8px;
+  }
+  .b-stage {
+    display: flex; justify-content: space-between; align-items: center;
+    width: 100%; padding: 0 16px;
+  }
+  .b-fighter {
+    display: flex; flex-direction: column; align-items: center; position: relative;
+    transition: transform 0.2s;
+  }
+  .b-fighter .sprite { font-size: 64px; filter: drop-shadow(0 8px 12px rgba(0,0,0,0.6)); }
+  .b-fighter.hit { animation: shake 0.35s; }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-10px) scale(0.95); filter: brightness(2) sepia(1) hue-rotate(-50deg); }
+    75% { transform: translateX(10px); }
+  }
+  .floating-dmg {
+    position: absolute; top: -15px; font-weight: 900; font-size: 18px;
+    color: #ff5555; text-shadow: 0 2px 4px #000;
+    animation: floatUp 1s forwards; pointer-events: none; white-space: nowrap;
+  }
+  @keyframes floatUp {
+    0% { opacity: 1; transform: translateY(0) scale(0.9); }
+    50% { transform: translateY(-22px) scale(1.1); }
+    100% { opacity: 0; transform: translateY(-38px) scale(1); }
+  }
+  .b-log-box {
+    background: rgba(13, 17, 23, 0.85); border: 1px solid #30363d;
+    border-radius: 10px; width: 100%; padding: 8px 10px;
+    font-size: 12px; min-height: 54px; max-height: 70px; overflow-y: auto;
+  }
+  .b-controls {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 8px;
+  }
+  .act-btn {
+    background: var(--bg-panel); border: 1px solid #30363d; color: var(--text-main);
+    padding: 10px 8px; border-radius: 10px; font-size: 12px; font-weight: 700;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+    cursor: pointer; position: relative;
+  }
+  .act-btn:active { background: #30363d; }
+  .act-btn .sub { font-size: 10px; color: var(--text-muted); font-weight: 500; }
+  .eff-tag {
+    position: absolute; top: 6px; right: 6px;
+    font-size: 9px; padding: 1px 4px; border-radius: 4px; font-weight: 800;
+  }
+  .eff-up { background: rgba(46,160,67,0.25); color: #56d364; }
+  .eff-down { background: rgba(248,81,73,0.25); color: #ff7b72; }
+
+  /* TOAST */
+  #toast {
+    position: fixed; top: 62px; left: 50%; transform: translateX(-50%);
+    background: #2ea043; color: #fff; padding: 8px 16px; border-radius: 20px;
+    font-size: 12px; font-weight: 700; z-index: 200; display: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  }
+  .biome-card {
+    background: var(--bg-card); border: 1px solid #30363d; border-radius: 12px;
+    padding: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;
+  }
+  .status-pills { display: flex; gap: 4px; margin-top: 4px; min-height: 18px; }
+  .s-pill { font-size: 10px; background: #30363d; padding: 1px 6px; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<div id="toast">Уведомление</div>
+
+<!-- TOP BAR -->
+<div class="top-bar">
+  <div class="player-info">
+    <div class="avatar-circle" id="ui-avatar">A</div>
+    <div class="player-meta">
+      <h4><span id="ui-username">Игрок</span> <span class="lvl-badge" id="ui-lvl">Ур. 1</span></h4>
+      <div class="elo-text">🏆 <span id="ui-elo">1000</span> ELO</div>
+    </div>
+  </div>
+  <div class="currencies">
+    <div class="curr-pill" title="Энергия охоты">⚡ <span id="ui-energy">100/100</span></div>
+    <div class="curr-pill" title="Монеты">💰 <span id="ui-coins">500</span></div>
+    <div class="curr-pill" title="Пыль эволюции">✨ <span id="ui-dust">50</span></div>
+  </div>
+</div>
+
+<!-- CONTENT AREA -->
+<div class="content-area">
+
+  <!-- TAB 1: PETS & COLLECTION -->
+  <div id="tab-pets" class="tab-view active">
+    <div class="sub-nav">
+      <button class="sub-btn active" onclick="switchPetsSub('my', this)">Мои питомцы</button>
+      <button class="sub-btn" onclick="switchPetsSub('dex', this)">Бестиарий (<span id="ui-dex-pct">0%</span>)</button>
+      <button class="sub-btn" onclick="switchPetsSub('inv', this)">Инвентарь</button>
+    </div>
+
+    <div id="pets-sub-my">
+      <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px; display:flex; justify-content:space-between;">
+        <span>Нажми на питомца для прокачки, эволюции или постановки в команду (до 3 шт.)</span>
+        <span id="ui-pet-count">0 шт.</span>
+      </div>
+      <div class="pet-grid" id="my-pets-grid"></div>
+    </div>
+
+    <div id="pets-sub-dex" style="display:none;">
+      <div style="background:var(--bg-card); padding:10px; border-radius:10px; margin-bottom:10px; font-size:12px; border:1px solid #30363d;">
+        📖 <b>Бонус коллекции:</b> Каждые 10% открытых видов дают <b>+1% ко всем статам</b> твоих питомцев в бою! Текущий бонус: <b style="color:var(--success)" id="ui-dex-bonus">+0%</b>
+      </div>
+      <div class="pet-grid" id="dex-grid"></div>
+    </div>
+
+    <div id="pets-sub-inv" style="display:none;">
+      <div id="inv-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+    </div>
+  </div>
+
+  <!-- TAB 2: HUNT -->
+  <div id="tab-hunt" class="tab-view">
+    <div style="background:var(--bg-card); padding:12px; border-radius:12px; border:1px solid #30363d; margin-bottom:12px;">
+      <h3 style="font-size:15px; margin-bottom:4px;">🌲 Охотничьи угодья</h3>
+      <p style="font-size:12px; color:var(--text-muted);">Каждая вылазка стоит <b>10 ⚡ Энергии</b>. Энергия восстанавливается по 1 ед. каждые 6 минут (в демо есть бесплатный тоник в инвентаре).</p>
+    </div>
+
+    <div id="hunt-biomes"></div>
+
+    <!-- ACTIVE ENCOUNTER BOX -->
+    <div id="hunt-encounter" style="display:none; background:var(--bg-card); padding:16px; border-radius:14px; border:2px solid var(--accent); text-align:center;">
+      <div id="enc-rarity-tag" style="font-size:11px; font-weight:800; text-transform:uppercase; margin-bottom:4px;">ОБЫЧНЫЙ</div>
+      <div id="enc-sprite" style="font-size:64px; margin:10px 0;">🔥</div>
+      <h3 id="enc-name">Дикий Питомец</h3>
+      <p id="enc-meta" style="font-size:12px; color:var(--text-muted); margin-bottom:14px;">Уровень 3 • Стихия: Огонь</p>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
+        <button class="btn btn-outline" onclick="attemptCatch('net_basic')">🕸 Обычная сеть<br><small id="chance-basic">Шанс: 50%</small></button>
+        <button class="btn btn-warning" onclick="attemptCatch('net_master')">🔮 Мастер-сфера<br><small id="chance-master">Шанс: 90%</small></button>
+      </div>
+      <div style="display:grid; grid-template-columns:2fr 1fr; gap:8px;">
+        <button class="btn btn-danger" onclick="fightWildPet()">⚔️ Победить (Опыт + Пыль)</button>
+        <button class="btn btn-outline" onclick="closeEncounter()">Уйти</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 3: ARENA PVP -->
+  <div id="tab-arena" class="tab-view">
+    <div style="text-align:center; padding: 14px 10px; background: linear-gradient(180deg, #161b22 0%, #0d1117 100%); border-radius:16px; border:1px solid #30363d; margin-bottom:12px;">
+      <div style="font-size:11px; color:var(--warning); font-weight:800; letter-spacing:1px;">СЕЗОН 1: ПРОБУЖДЕНИЕ СТИХИЙ</div>
+      <h2 style="margin:6px 0;">Колизей Питомцев</h2>
+      <p style="font-size:12px; color:var(--text-muted); margin-bottom:14px;">Твоя боевая тройка (1v1 до 3 питомцев):</p>
+      
+      <div id="arena-team-preview" style="display:flex; justify-content:center; gap:10px; margin-bottom:16px;"></div>
+
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <button class="btn btn-success" style="padding:14px; font-size:15px;" onclick="startArenaMatch('ranked')">🏆 Рейтинговый бой (ELO)</button>
+        <button class="btn btn-outline" onclick="startArenaMatch('quick')">⚡ Быстрый бой (Тренировка без риска)</button>
+        <button class="btn btn-warning" onclick="startArenaMatch('tourney')">👑 Кубковый матч (Босс-турнир)</button>
+      </div>
+    </div>
+
+    <div style="background:var(--bg-card); padding:12px; border-radius:12px; border:1px solid #30363d; font-size:12px;">
+      <h4 style="margin-bottom:6px;">🧭 Памятка стихий (x1.3 урона):</h4>
+      <p style="color:var(--text-muted); line-height:1.5;">
+        🔥 <b>Огонь</b> ➔ 🌿 <b>Земля</b> ➔ 🌪 <b>Воздух</b> ➔ 💧 <b>Вода</b> ➔ 🔥 <b>Огонь</b><br>
+        ☀️ <b>Свет</b> ⟷ 🌑 <b>Тьма</b> (бьют друг друга с бонусом x1.3)
+      </p>
+    </div>
+  </div>
+
+  <!-- TAB 4: MARKET & TRADE -->
+  <div id="tab-market" class="tab-view">
+    <div class="sub-nav">
+      <button class="sub-btn active" onclick="switchMarketSub('shop', this)">Лавка</button>
+      <button class="sub-btn" onclick="switchMarketSub('p2p', this)">Рынок игроков</button>
+      <button class="sub-btn" onclick="switchMarketSub('escrow', this)">🤝 Гарант-Обмен</button>
+    </div>
+
+    <!-- NPC SHOP -->
+    <div id="market-sub-shop">
+      <div id="shop-items-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+    </div>
+
+    <!-- P2P MARKET & AUCTION -->
+    <div id="market-sub-p2p" style="display:none;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <span style="font-size:12px; color:var(--text-muted);">Комиссия рынка: 10% (защита от инфляции)</span>
+        <button class="btn" style="width:auto; padding:6px 12px; font-size:11px;" onclick="openSellModal()">+ Выставить лот</button>
+      </div>
+      <div id="market-listings" style="display:flex; flex-direction:column; gap:8px;"></div>
+    </div>
+
+    <!-- ESCROW DIRECT TRADE -->
+    <div id="market-sub-escrow" style="display:none;">
+      <div style="background:var(--bg-card); padding:14px; border-radius:12px; border:1px solid #30363d;">
+        <h4 style="margin-bottom:6px;">🛡 Безопасная сделка через Бота-Гаранта</h4>
+        <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
+          Защита от скама и перелива: система проверяет рыночную ценность обеих сторон (допустимое отклонение ±35%) и требует двойного подтверждения.
+        </p>
+        <div style="background:var(--bg-panel); padding:10px; border-radius:8px; margin-bottom:10px;">
+          <div style="font-size:11px; color:var(--text-muted);">Твой слот обмена:</div>
+          <select id="escrow-my-pet" style="width:100%; padding:8px; margin-top:4px; background:#0d1117; color:#fff; border:1px solid #30363d; border-radius:6px;"></select>
+        </div>
+        <div style="background:var(--bg-panel); padding:10px; border-radius:8px; margin-bottom:12px;">
+          <div style="font-size:11px; color:var(--text-muted);">Предложение второго игрока (Код комнаты #8841):</div>
+          <div style="font-size:13px; font-weight:700; margin-top:4px;">💧 Аквазавр [Ур. 15 | Редкий]</div>
+        </div>
+        <button class="btn btn-success" onclick="executeSafeTrade()">🔒 Проверить баланс ценности и Обменять</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 5: QUESTS & PROFILE -->
+  <div id="tab-profile" class="tab-view">
+    <div style="background:var(--bg-card); padding:14px; border-radius:12px; border:1px solid #30363d; margin-bottom:12px;">
+      <h4>📜 Ежедневные задания</h4>
+      <div id="quests-list" style="margin-top:10px; display:flex; flex-direction:column; gap:8px;"></div>
+    </div>
+
+    <div style="background:var(--bg-card); padding:14px; border-radius:12px; border:1px solid #30363d; margin-bottom:12px;">
+      <h4>🏆 Топ Рейтинга (Сезон 1)</h4>
+      <div id="leaderboard-list" style="margin-top:10px; display:flex; flex-direction:column; gap:6px; font-size:13px;"></div>
+    </div>
+
+    <button class="btn btn-outline" style="font-size:11px; opacity:0.6;" onclick="resetSaveData()">🔄 Сбросить локальный прогресс (Тест)</button>
+  </div>
+
+</div>
+
+<!-- MODAL FOR PET DETAILS -->
+<div class="modal-overlay" id="pet-modal">
+  <div class="modal-box" id="pet-modal-content"></div>
+</div>
+
+<!-- BATTLE FULLSCREEN OVERLAY -->
+<div class="battle-screen" id="battle-screen">
+  <!-- Enemy HUD -->
+  <div class="b-hud">
+    <div class="b-header">
+      <div><b id="b-enemy-name">Соперник</b> <span id="b-enemy-lvl" style="color:var(--text-muted)">Ур. 10</span></div>
+      <div class="team-balls" id="b-enemy-balls"></div>
+    </div>
+    <div class="hp-bar-wrap">
+      <div class="hp-bar-fill" id="b-enemy-hp-bar" style="width:100%;"></div>
+      <div class="hp-bar-text" id="b-enemy-hp-text">100 / 100</div>
+    </div>
+    <div class="status-pills" id="b-enemy-statuses"></div>
+  </div>
+
+  <!-- Center Stage -->
+  <div class="b-arena-center">
+    <div style="background:rgba(0,0,0,0.6); padding:4px 12px; border-radius:12px; font-size:12px; font-weight:700; border:1px solid #30363d;">
+      Раунд <span id="b-round-num">1</span> • ⏱ <span id="b-timer" style="color:var(--warning)">25</span>с
+    </div>
+
+    <div class="b-stage">
+      <div class="b-fighter" id="b-player-fighter">
+        <div class="sprite" id="b-player-sprite">🔥</div>
+        <span style="font-size:11px; font-weight:700; margin-top:4px;" id="b-player-petname">Мой питомец</span>
+      </div>
+      <div style="font-size:20px; font-weight:900; color:var(--text-muted);">VS</div>
+      <div class="b-fighter" id="b-enemy-fighter">
+        <div class="sprite" id="b-enemy-sprite">💧</div>
+        <span style="font-size:11px; font-weight:700; margin-top:4px;" id="b-enemy-petname">Враг</span>
+      </div>
+    </div>
+
+    <div class="b-log-box" id="b-log">Бой начался! Выбери действие.</div>
+  </div>
+
+  <!-- Player HUD & Actions -->
+  <div>
+    <div class="b-hud" style="margin-bottom:8px;">
+      <div class="b-header">
+        <div><b id="b-player-title">Твой питомец</b> <span id="b-player-lvl" style="color:var(--text-muted)">Ур. 1</span></div>
+        <div class="team-balls" id="b-player-balls"></div>
+      </div>
+      <div class="hp-bar-wrap">
+        <div class="hp-bar-fill" id="b-player-hp-bar" style="width:100%;"></div>
+        <div class="hp-bar-text" id="b-player-hp-text">100 / 100</div>
+      </div>
+      <div class="status-pills" id="b-player-statuses"></div>
+    </div>
+
+    <div class="b-controls" id="b-controls"></div>
+  </div>
+</div>
+
+<!-- BOTTOM NAVIGATION -->
+<div class="bottom-nav">
+  <button class="nav-item active" onclick="switchTab('pets', this)"><span class="icon">🐾</span>Питомник</button>
+  <button class="nav-item" onclick="switchTab('hunt', this)"><span class="icon">🌲</span>Охота</button>
+  <button class="nav-item" onclick="switchTab('arena', this)"><span class="icon">⚔️</span>Арена</button>
+  <button class="nav-item" onclick="switchTab('market', this)"><span class="icon">⚖️</span>Рынок</button>
+  <button class="nav-item" onclick="switchTab('profile', this)"><span class="icon">📜</span>Профиль</button>
+</div>
+
+<script>
+/* ============================================================================
+   1. TELEGRAM WEBAPP & HAPTIC INIT
+============================================================================ */
+const tg = window.Telegram?.WebApp;
+if (tg) {
+  tg.ready();
+  tg.expand();
+}
+function haptic(type = 'light') {
+  try {
+    if (tg?.HapticFeedback) {
+      if (type === 'success' || type === 'error' || type === 'warning') {
+        tg.HapticFeedback.notificationOccurred(type);
+      } else {
+        tg.HapticFeedback.impactOccurred(type);
+      }
+    }
+  } catch (e) {}
+}
+function showToast(msg, color = '#2ea043') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.background = color;
+  t.style.display = 'block';
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(() => { t.style.display = 'none'; }, 2400);
+}
+
+/* ============================================================================
+   2. GAME CATALOGS (ELEMENTS, RARITIES, 12 SPECIES, SKILLS, ITEMS)
+============================================================================ */
+const ELEMENTS = {
+  fire:  { name: 'Огонь', icon: '🔥', strong: 'earth', weak: 'water' },
+  earth: { name: 'Земля', icon: '🌿', strong: 'air',   weak: 'fire' },
+  air:   { name: 'Воздух',icon: '🌪', strong: 'water', weak: 'earth' },
+  water: { name: 'Вода',  icon: '💧', strong: 'fire',  weak: 'air' },
+  light: { name: 'Свет',  icon: '☀️', strong: 'dark',  weak: 'light' },
+  dark:  { name: 'Тьма',  icon: '🌑', strong: 'light', weak: 'dark' }
+};
+
+const RARITIES = {
+  common:    { name: 'Обычный',     color: 'r-common',    catchBase: 0.75, growth: 0.05,  dust: 10,   floorPrice: 100 },
+  rare:      { name: 'Редкий',      color: 'r-rare',      catchBase: 0.45, growth: 0.055, dust: 30,   floorPrice: 300 },
+  epic:      { name: 'Эпический',   color: 'r-epic',      catchBase: 0.22, growth: 0.06,  dust: 90,   floorPrice: 800 },
+  legendary: { name: 'Легендарный', color: 'r-legendary', catchBase: 0.09, growth: 0.065, dust: 350,  floorPrice: 2500 },
+  mythic:    { name: 'Мифический',  color: 'r-mythic',    catchBase: 0.03, growth: 0.07,  dust: 1500, floorPrice: 7000 }
+};
+
+const SPECIES = [
+  {
+    id: 1, rarity: 'common', element: 'fire',
+    stages: ['Искрохвост', 'Пиролис', 'Инфернакс'],
+    sprites: ['🦊', '🐺', '🦁'],
+    base: { hp: 110, atk: 28, def: 18, spd: 24 },
+    s1: { name: 'Огненный укус', mult: 1.3, cd: 2, effect: 'burn', desc: '130% урона + Ожог (2 хода)' },
+    s2: { name: 'Взрыв сверхновой', mult: 1.9, cd: 4, effect: 'burn', desc: '190% урона + сильный Ожог' },
+    passive: 'Ярость пламени: +10% к Атаке'
+  },
+  {
+    id: 2, rarity: 'common', element: 'water',
+    stages: ['Капленог', 'Аквазавр', 'Левиафанчик'],
+    sprites: ['🐸', '🦎', '🐊'],
+    base: { hp: 125, atk: 24, def: 24, spd: 18 },
+    s1: { name: 'Водяной хлыст', mult: 1.25, cd: 2, effect: 'heal', desc: '125% урона и лечение 15% HP' },
+    s2: { name: 'Цунами', mult: 1.85, cd: 4, effect: 'weaken', desc: '185% урона + снижение Атаки врага' },
+    passive: 'Водный панцирь: +10% к Защите'
+  },
+  {
+    id: 3, rarity: 'common', element: 'earth',
+    stages: ['Корневик', 'Древостраж', 'Титан Леса'],
+    sprites: ['🌱', '🌲', '🌳'],
+    base: { hp: 140, atk: 22, def: 28, spd: 14 },
+    s1: { name: 'Каменный град', mult: 1.3, cd: 2, effect: 'shield', desc: '130% урона + Щит на 1 ход' },
+    s2: { name: 'Разлом коры', mult: 1.8, cd: 4, effect: 'stun', desc: '180% урона + 35% шанс Оглушения' },
+    passive: 'Корни земли: регенерация 5% HP каждый ход'
+  },
+  {
+    id: 4, rarity: 'common', element: 'air',
+    stages: ['Ветрокрыл', 'Штормоклюв', 'Грифон Бури'],
+    sprites: ['🐦', '🦅', '🦉'],
+    base: { hp: 100, atk: 27, def: 16, spd: 30 },
+    s1: { name: 'Порыв ветра', mult: 1.3, cd: 2, effect: 'haste', desc: '130% урона + ускорение' },
+    s2: { name: 'Ураганный пик', mult: 1.95, cd: 4, effect: 'crit_guarantee', desc: '195% урона с высоким шансом крита' },
+    passive: 'Попутный ветер: +12% к Скорости'
+  },
+  {
+    id: 5, rarity: 'rare', element: 'fire',
+    stages: ['Магмач', 'Вулканодон', 'Архидемон Лавы'],
+    sprites: ['🐞', '🦂', '🐉'],
+    base: { hp: 130, atk: 34, def: 24, spd: 22 },
+    s1: { name: 'Лавовый плевок', mult: 1.35, cd: 2, effect: 'burn', desc: '135% урона + Ожог' },
+    s2: { name: 'Метеоритный дождь', mult: 2.0, cd: 4, effect: 'burn', desc: '200% сокрушительного урона огнём' },
+    passive: 'Раскалённая броня: +12% Атаки'
+  },
+  {
+    id: 6, rarity: 'rare', element: 'water',
+    stages: ['Иглобрюх', 'Кракенёнок', 'Глубинный Кракен'],
+    sprites: ['🐡', '🐙', '🦑'],
+    base: { hp: 135, atk: 31, def: 26, spd: 21 },
+    s1: { name: 'Чернильный залп', mult: 1.35, cd: 2, effect: 'weaken', desc: '135% урона + ослабление врага' },
+    s2: { name: 'Водоворот Бездны', mult: 1.95, cd: 4, effect: 'vamp', desc: '195% урона + вампиризм 30%' },
+    passive: 'Глубинный холод: +10% ко всем статам'
+  },
+  {
+    id: 7, rarity: 'epic', element: 'light',
+    stages: ['Люминес', 'Серафим', 'Архонт Света'],
+    sprites: ['✨', '🦄', '👼'],
+    base: { hp: 145, atk: 38, def: 28, spd: 28 },
+    s1: { name: 'Луч очищения', mult: 1.4, cd: 2, effect: 'heal', desc: '140% урона + исцеление 20% HP' },
+    s2: { name: 'Божественный Суд', mult: 2.1, cd: 4, effect: 'shield', desc: '210% урона + священный щит' },
+    passive: 'Благословение: +15% к Здоровью'
+  },
+  {
+    id: 8, rarity: 'epic', element: 'dark',
+    stages: ['Тенелап', 'Ночной Фантом', 'Жнец Пустоты'],
+    sprites: ['🦇', '🐈‍⬛', '👻'],
+    base: { hp: 128, atk: 44, def: 22, spd: 34 },
+    s1: { name: 'Клинок тени', mult: 1.45, cd: 2, effect: 'vamp', desc: '145% урона + кража здоровья' },
+    s2: { name: 'Затмение Души', mult: 2.15, cd: 4, effect: 'stun', desc: '215% урона + шанс Оглушения' },
+    passive: 'Покров Тьмы: +15% к шансу Крита'
+  },
+  {
+    id: 9, rarity: 'legendary', element: 'earth',
+    stages: ['Геолит', 'Изумрудный Голем', 'Хранитель Материка'],
+    sprites: ['🪨', '🗿', '🏔'],
+    base: { hp: 185, atk: 42, def: 40, spd: 20 },
+    s1: { name: 'Тектонический удар', mult: 1.45, cd: 2, effect: 'shield', desc: '145% урона + каменный щит' },
+    s2: { name: 'Гнев Геи', mult: 2.2, cd: 4, effect: 'stun', desc: '220% урона + Оглушение' },
+    passive: 'Несокрушимый: -15% входящего урона'
+  },
+  {
+    id: 10, rarity: 'legendary', element: 'air',
+    stages: ['Вольтик', 'Громовержец', 'Владыка Небес'],
+    sprites: ['⚡', '🌩', '🐲'],
+    base: { hp: 150, atk: 50, def: 28, spd: 40 },
+    s1: { name: 'Цепная молния', mult: 1.5, cd: 2, effect: 'haste', desc: '150% урона + ускорение' },
+    s2: { name: 'Грозовой Апокалипсис', mult: 2.25, cd: 4, effect: 'stun', desc: '225% урона молнией' },
+    passive: 'Сверхзвук: всегда ходит первым при равной скорости'
+  },
+  {
+    id: 11, rarity: 'mythic', element: 'light',
+    stages: ['Солярис', 'Феникс Зари', 'Вечный Гиперион'],
+    sprites: ['🐣', '🦚', '🐦‍🔥'],
+    base: { hp: 190, atk: 56, def: 38, spd: 42 },
+    s1: { name: 'Пламя Возрождения', mult: 1.55, cd: 2, effect: 'heal', desc: '155% урона + лечение 25% HP' },
+    s2: { name: 'Вспышка Творения', mult: 2.35, cd: 4, effect: 'burn', desc: '235% урона + солнечный ожог' },
+    passive: 'Бессмертное солнце: +20% ко всем характеристикам'
+  },
+  {
+    id: 12, rarity: 'mythic', element: 'dark',
+    stages: ['Некроморф', 'Хроно-Дракон', 'Пожиратель Галактик'],
+    sprites: ['🕷', '👾', '🌌'],
+    base: { hp: 180, atk: 62, def: 35, spd: 44 },
+    s1: { name: 'Сингулярность', mult: 1.6, cd: 2, effect: 'vamp', desc: '160% урона + вампиризм' },
+    s2: { name: 'Коллапс Времени', mult: 2.4, cd: 4, effect: 'stun', desc: '240% сокрушительного урона Тьмой' },
+    passive: 'Владыка Бездны: +20% Атаки и Скорости'
+  }
+];
+
+const ITEMS_CATALOG = {
+  food_meat:   { name: '🍖 Сочное мясо', desc: '+120 Опыта питомцу', price: 60 },
+  food_crystal:{ name: '💎 Звёздный фрукт', desc: '+600 Опыта питомцу', price: 250 },
+  net_basic:   { name: '🕸 Обычная сеть', desc: 'Базовая ловушка для охоты', price: 40 },
+  net_master:  { name: '🔮 Мастер-сфера', desc: 'Удваивает шанс поимки редких питомцев', price: 220 },
+  evo_stone:   { name: '💠 Камень Вознесения', desc: 'Нужен для 2 и 3 стадии эволюции', price: 400 },
+  energy_tonic:{ name: '🧪 Тоник Энергии', desc: 'Восстанавливает +50 ⚡ Энергии', price: 150 }
+};
+
+/* ============================================================================
+   3. PLAYER STATE & LOCAL STORAGE
+============================================================================ */
+let state = {
+  username: tg?.initDataUnsafe?.user?.first_name || 'Охотник',
+  level: 1,
+  exp: 0,
+  coins: 650,
+  dust: 120,
+  energy: 100,
+  maxEnergy: 100,
+  lastEnergyTick: Date.now(),
+  elo: 1000,
+  wins: 0,
+  losses: 0,
+  nextPetUid: 1,
+  pets: [],
+  collection: [1, 2],
+  inventory: {
+    food_meat: 5,
+    food_crystal: 1,
+    net_basic: 8,
+    net_master: 2,
+    evo_stone: 1,
+    energy_tonic: 2
+  },
+  quests: [
+    { id: 'q_hunt', title: 'Выйти на охоту 3 раза', cur: 0, max: 3, rewardCoins: 150, claimed: false },
+    { id: 'q_pvp',  title: 'Победить на Арене 2 раза', cur: 0, max: 2, rewardCoins: 250, claimed: false },
+    { id: 'q_feed', title: 'Покормить питомцев 3 раза', cur: 0, max: 3, rewardCoins: 120, claimed: false }
+  ],
+  marketListings: [
+    { id: 101, seller: 'ShadowKing', speciesId: 5, level: 14, evo: 1, price: 420 },
+    { id: 102, seller: 'CrystalMage', speciesId: 7, level: 22, evo: 1, price: 950 },
+    { id: 103, seller: 'Valkyrie', speciesId: 9, level: 30, evo: 2, price: 2800 }
+  ]
+};
+
+function saveState() {
+  localStorage.setItem('pet_arena_save_v1', JSON.stringify(state));
+  updateTopBar();
+}
+
+function loadState() {
+  const raw = localStorage.getItem('pet_arena_save_v1');
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      state = Object.assign(state, parsed);
+    } catch (e) {}
+  } else {
+    // Выдаём 3 стартовых питомцев разной стихии для полноценного 3v3 со старта
+    addPetToUser(1, 5, 1, 1);
+    addPetToUser(2, 5, 1, 2);
+    addPetToUser(3, 5, 1, 3);
+    saveState();
+  }
+}
+
+function resetSaveData() {
+  if (confirm('Сбросить весь прогресс и начать заново?')) {
+    localStorage.removeItem('pet_arena_save_v1');
+    location.reload();
+  }
+}
+
+/* ============================================================================
+   4. PET STATS & PROGRESSION FORMULAS
+============================================================================ */
+function getCollectionBonusMult() {
+  const pct = Math.floor((state.collection.length / SPECIES.length) * 100);
+  return 1 + Math.floor(pct / 10) * 0.01;
+}
+
+function calcPetStats(pet) {
+  const sp = SPECIES.find(s => s.id === pet.speciesId);
+  const rar = RARITIES[sp.rarity];
+  const lvlMult = 1 + (pet.level - 1) * rar.growth;
+  const evoMult = pet.evo === 1 ? 1.0 : (pet.evo === 2 ? 1.22 : 1.50);
+  const colMult = getCollectionBonusMult();
+  const totalMult = lvlMult * evoMult * colMult;
+
+  return {
+    hp:  Math.floor(sp.base.hp  * totalMult),
+    atk: Math.floor(sp.base.atk * totalMult),
+    def: Math.floor(sp.base.def * totalMult),
+    spd: Math.floor(sp.base.spd * totalMult)
+  };
+}
+
+function getPetDisplayName(pet) {
+  const sp = SPECIES.find(s => s.id === pet.speciesId);
+  return sp.stages[pet.evo - 1];
+}
+function getPetSprite(pet) {
+  const sp = SPECIES.find(s => s.id === pet.speciesId);
+  return sp.sprites[pet.evo - 1];
+}
+function expNeededForLevel(lvl) {
+  return Math.floor(50 * Math.pow(lvl, 1.5));
+}
+
+function addPetToUser(speciesId, level = 1, evo = 1, teamSlot = 0) {
+  const pet = {
+    uid: state.nextPetUid++,
+    speciesId,
+    level,
+    exp: 0,
+    evo,
+    skillLvl: 1,
+    teamSlot
+  };
+  state.pets.push(pet);
+  if (!state.collection.includes(speciesId)) {
+    state.collection.push(speciesId);
+  }
+  return pet;
+}
+
+/* ============================================================================
+   5. UI RENDERING
+============================================================================ */
+function updateTopBar() {
+  document.getElementById('ui-username').textContent = state.username;
+  document.getElementById('ui-avatar').textContent = state.username.charAt(0).toUpperCase();
+  document.getElementById('ui-lvl').textContent = `Ур. ${state.level}`;
+  document.getElementById('ui-elo').textContent = state.elo;
+  document.getElementById('ui-energy').textContent = `${state.energy}/${state.maxEnergy}`;
+  document.getElementById('ui-coins').textContent = state.coins.toLocaleString();
+  document.getElementById('ui-dust').textContent = state.dust.toLocaleString();
+
+  const dexPct = Math.floor((state.collection.length / SPECIES.length) * 100);
+  document.getElementById('ui-dex-pct').textContent = `${dexPct}%`;
+  document.getElementById('ui-dex-bonus').textContent = `+${Math.floor(dexPct / 10)}%`;
+}
+
+function switchTab(tabId, btn) {
+  haptic('light');
+  document.querySelectorAll('.tab-view').forEach(el => el.classList.remove('active'));
+  document.getElementById(`tab-${tabId}`).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+
+  if (tabId === 'pets') renderPetsTab();
+  if (tabId === 'hunt') renderHuntTab();
+  if (tabId === 'arena') renderArenaTab();
+  if (tabId === 'market') renderMarketTab();
+  if (tabId === 'profile') renderProfileTab();
+}
+
+function switchPetsSub(sub, btn) {
+  haptic('light');
+  btn.parentElement.querySelectorAll('.sub-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('pets-sub-my').style.display = sub === 'my' ? 'block' : 'none';
+  document.getElementById('pets-sub-dex').style.display = sub === 'dex' ? 'block' : 'none';
+  document.getElementById('pets-sub-inv').style.display = sub === 'inv' ? 'block' : 'none';
+  renderPetsTab();
+}
+
+function renderPetsTab() {
+  updateTopBar();
+  const grid = document.getElementById('my-pets-grid');
+  grid.innerHTML = '';
+  document.getElementById('ui-pet-count').textContent = `${state.pets.length} шт.`;
+
+  // Sort: team first, then level desc
+  const sorted = [...state.pets].sort((a, b) => {
+    const aTeam = a.teamSlot > 0 ? 1 : 0;
+    const bTeam = b.teamSlot > 0 ? 1 : 0;
+    if (aTeam !== bTeam) return bTeam - aTeam;
+    if (a.teamSlot !== b.teamSlot) return a.teamSlot - b.teamSlot;
+    return b.level - a.level;
+  });
+
+  sorted.forEach(pet => {
+    const sp = SPECIES.find(s => s.id === pet.speciesId);
+    const rar = RARITIES[sp.rarity];
+    const el = ELEMENTS[sp.element];
+    const st = calcPetStats(pet);
+
+    const card = document.createElement('div');
+    card.className = `pet-card ${rar.color}`;
+    card.onclick = () => openPetModal(pet.uid);
+    card.innerHTML = `
+      ${pet.teamSlot > 0 ? `<div class="team-badge">Слот ${pet.teamSlot}</div>` : ''}
+      <div class="elem-badge">${el.icon}</div>
+      <div class="pet-sprite">${getPetSprite(pet)}</div>
+      <div class="pet-name">${getPetDisplayName(pet)}</div>
+      <div class="pet-sub">Ур. ${pet.level} • Эво ${['I','II','III'][pet.evo-1]} • ${rar.name}</div>
+      <div class="stat-mini">
+        <span>❤️${st.hp}</span>
+        <span>⚔️${st.atk}</span>
+        <span>🛡${st.def}</span>
+        <span>⚡${st.spd}</span>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+
+  // Render Bestiary
+  const dexGrid = document.getElementById('dex-grid');
+  dexGrid.innerHTML = '';
+  SPECIES.forEach(sp => {
+    const unlocked = state.collection.includes(sp.id);
+    const rar = RARITIES[sp.rarity];
+    const el = ELEMENTS[sp.element];
+    const card = document.createElement('div');
+    card.className = `pet-card ${ unlocked ? rar.color : '' }`;
+    card.style.opacity = unlocked ? '1' : '0.45';
+    card.innerHTML = `
+      <div class="elem-badge">${el.icon}</div>
+      <div class="pet-sprite">${unlocked ? sp.sprites[2] : '❓'}</div>
+      <div class="pet-name">${unlocked ? sp.stages[0] + ' ➔ ' + sp.stages[2] : 'Неизвестный вид'}</div>
+      <div class="pet-sub">${rar.name} • ${el.name}</div>
+    `;
+    dexGrid.appendChild(card);
+  });
+
+  // Render Inventory
+  const invList = document.getElementById('inv-list');
+  invList.innerHTML = '';
+  Object.keys(ITEMS_CATALOG).forEach(key => {
+    const qty = state.inventory[key] || 0;
+    const item = ITEMS_CATALOG[key];
+    const row = document.createElement('div');
+    row.className = 'biome-card';
+    row.innerHTML = `
+      <div>
+        <div style="font-weight:700; font-size:14px;">${item.name} <span style="color:var(--accent)">x${qty}</span></div>
+        <div style="font-size:11px; color:var(--text-muted);">${item.desc}</div>
+      </div>
+      ${key === 'energy_tonic' && qty > 0 ? `<button class="btn" style="width:auto; padding:6px 12px;" onclick="useEnergyTonic()">Выпить</button>` : ''}
+    `;
+    invList.appendChild(row);
+  });
+}
+
+function useEnergyTonic() {
+  if ((state.inventory.energy_tonic || 0) <= 0) return;
+  state.inventory.energy_tonic--;
+  state.energy = Math.min(state.maxEnergy, state.energy + 50);
+  haptic('success');
+  showToast('⚡ +50 Энергии восстановлено!');
+  saveState();
+  renderPetsTab();
+}
+
+/* ============================================================================
+   6. PET MODAL (FEED, EVOLVE, SKILL UP, TEAM EQUIP)
+============================================================================ */
+function openPetModal(uid) {
+  haptic('light');
+  const pet = state.pets.find(p => p.uid === uid);
+  if (!pet) return;
+  const sp = SPECIES.find(s => s.id === pet.speciesId);
+  const rar = RARITIES[sp.rarity];
+  const el = ELEMENTS[sp.element];
+  const st = calcPetStats(pet);
+  const needExp = expNeededForLevel(pet.level);
+  const evoReqLvl = pet.evo === 1 ? 15 : (pet.evo === 2 ? 35 : 999);
+  const evoDustCost = rar.dust * pet.evo * 2;
+
+  const box = document.getElementById('pet-modal-content');
+  box.innerHTML = `
+    <button class="modal-close" onclick="closePetModal()">✕</button>
+    <div style="text-align:center;">
+      <div style="font-size:58px;">${getPetSprite(pet)}</div>
+      <h3 style="margin-top:4px;">${getPetDisplayName(pet)}</h3>
+      <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">
+        ${el.icon} ${el.name} • ${rar.name} • Уровень ${pet.level}/100 (Эво ${pet.evo}/3)
+      </div>
+      <div class="hp-bar-wrap" style="height:12px; margin-bottom:12px;">
+        <div class="hp-bar-fill" style="width:${Math.min(100, Math.floor((pet.exp/needExp)*100))}%; background:var(--accent);"></div>
+        <div class="hp-bar-text">EXP: ${pet.exp} / ${needExp}</div>
+      </div>
+    </div>
+
+    <div class="stat-mini" style="margin-bottom:12px; padding:8px; font-size:12px;">
+      <div>❤️ HP: <b>${st.hp}</b></div>
+      <div>⚔️ АТК: <b>${st.atk}</b></div>
+      <div>🛡 ЗАЩ: <b>${st.def}</b></div>
+      <div>⚡ СКР: <b>${st.spd}</b></div>
+    </div>
+
+    <div style="background:var(--bg-panel); padding:10px; border-radius:10px; font-size:12px; margin-bottom:12px; display:flex; flex-direction:column; gap:6px;">
+      <div>🔥 <b>Навык 1 (Ур.${pet.skillLvl}):</b> ${sp.s1.name} — <span style="color:var(--text-muted)">${sp.s1.desc}</span></div>
+      <div>🌋 <b>Ульта ${pet.evo < 2 ? '🔒 (Со 2 стадии Эво)' : ''}:</b> ${sp.s2.name} — <span style="color:var(--text-muted)">${sp.s2.desc}</span></div>
+      <div>🧬 <b>Пассивка:</b> <span style="color:var(--success)">${sp.passive}</span></div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
+      <button class="btn btn-outline" onclick="feedPet(${pet.uid}, 'food_meat')">🍖 Мясо (${state.inventory.food_meat||0})<br><small>+120 EXP</small></button>
+      <button class="btn btn-outline" onclick="feedPet(${pet.uid}, 'food_crystal')">💎 Фрукт (${state.inventory.food_crystal||0})<br><small>+600 EXP</small></button>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;">
+      <button class="btn btn-warning" onclick="upgradeSkill(${pet.uid})">⬆️ Усилить навыки<br><small>${pet.skillLvl * 120} 💰</small></button>
+      ${pet.evo < 3 ? `
+        <button class="btn btn-success" onclick="evolvePet(${pet.uid})" ${pet.level < evoReqLvl ? 'disabled' : ''}>
+          🧬 Эволюция (Ур.${evoReqLvl})<br><small>${evoDustCost} ✨ + 1 💠</small>
+        </button>
+      ` : `<button class="btn" disabled>🌟 Макс. Эволюция</button>`}
+    </div>
+
+    <div style="display:flex; gap:6px; margin-bottom:8px;">
+      <button class="btn ${pet.teamSlot===1?'btn-success':'btn-outline'}" onclick="setTeamSlot(${pet.uid}, 1)">Слот 1</button>
+      <button class="btn ${pet.teamSlot===2?'btn-success':'btn-outline'}" onclick="setTeamSlot(${pet.uid}, 2)">Слот 2</button>
+      <button class="btn ${pet.teamSlot===3?'btn-success':'btn-outline'}" onclick="setTeamSlot(${pet.uid}, 3)">Слот 3</button>
+      ${pet.teamSlot > 0 ? `<button class="btn btn-danger" onclick="setTeamSlot(${pet.uid}, 0)">В запас</button>` : ''}
+    </div>
+
+    ${state.pets.length > 3 && pet.teamSlot === 0 ? `
+      <button class="btn btn-danger" style="margin-top:4px; font-size:11px; padding:7px;" onclick="releasePet(${pet.uid})">
+        🕊 Отпустить на волю (+${rar.dust} ✨ Пыли эволюции)
+      </button>
+    ` : ''}
+  `;
+  document.getElementById('pet-modal').classList.add('open');
+}
+
+function closePetModal() {
+  document.getElementById('pet-modal').classList.remove('open');
+}
+
+function addExpToPet(pet, amount) {
+  pet.exp += amount;
+  let leveledUp = false;
+  while (pet.level < 100 && pet.exp >= expNeededForLevel(pet.level)) {
+    pet.exp -= expNeededForLevel(pet.level);
+    pet.level++;
+    leveledUp = true;
+  }
+  return leveledUp;
+}
+
+function feedPet(uid, itemKey) {
+  const pet = state.pets.find(p => p.uid === uid);
+  if (!pet || (state.inventory[itemKey] || 0) <= 0) {
+    showToast('Недостаточно корма! Купи в Лавке или добудь на охоте.', '#f85149');
+    return;
+  }
+  state.inventory[itemKey]--;
+  const gain = itemKey === 'food_meat' ? 120 : 600;
+  const lvlUp = addExpToPet(pet, gain);
+  progressQuest('q_feed', 1);
+  haptic(lvlUp ? 'success' : 'light');
+  showToast(lvlUp ? `🎉 Уровень повышен до ${pet.level}!` : `+${gain} EXP!`);
+  saveState();
+  openPetModal(uid);
+  renderPetsTab();
+}
+
+function upgradeSkill(uid) {
+  const pet = state.pets.find(p => p.uid === uid);
+  const cost = pet.skillLvl * 120;
+  if (state.coins < cost) {
+    showToast('Не хватает монет!', '#f85149');
+    return;
+  }
+  state.coins -= cost;
+  pet.skillLvl++;
+  haptic('success');
+  showToast(`🔥 Навыки усилены до Ур. ${pet.skillLvl}! (+5% урона)`);
+  saveState();
+  openPetModal(uid);
+}
+
+function evolvePet(uid) {
+  const pet = state.pets.find(p => p.uid === uid);
+  const sp = SPECIES.find(s => s.id === pet.speciesId);
+  const rar = RARITIES[sp.rarity];
+  const reqLvl = pet.evo === 1 ? 15 : 35;
+  const dustCost = rar.dust * pet.evo * 2;
+
+  if (pet.level < reqLvl) return;
+  if (state.dust < dustCost || (state.inventory.evo_stone || 0) < 1) {
+    showToast('Нужно больше Пыли эволюции и 1 Камень Вознесения!', '#f85149');
+    return;
+  }
+  state.dust -= dustCost;
+  state.inventory.evo_stone--;
+  pet.evo++;
+  haptic('success');
+  showToast(`🧬 ЭВОЛЮЦИЯ! Питомец стал: ${getPetDisplayName(pet)}!`);
+  saveState();
+  openPetModal(uid);
+  renderPetsTab();
+}
+
+function setTeamSlot(uid, slot) {
+  const pet = state.pets.find(p => p.uid === uid);
+  if (slot > 0) {
+    state.pets.forEach(p => { if (p.teamSlot === slot) p.teamSlot = 0; });
+  }
+  pet.teamSlot = slot;
+  haptic('light');
+  saveState();
+  openPetModal(uid);
+  renderPetsTab();
+}
+
+function releasePet(uid) {
+  const pet = state.pets.find(p => p.uid === uid);
+  if (!pet || pet.teamSlot > 0) return;
+  const sp = SPECIES.find(s => s.id === pet.speciesId);
+  const dustGain = RARITIES[sp.rarity].dust;
+  state.pets = state.pets.filter(p => p.uid !== uid);
+  state.dust += dustGain;
+  haptic('warning');
+  showToast(`Питомец отпущен. Получено +${dustGain} ✨ Пыли!`);
+  closePetModal();
+  saveState();
+  renderPetsTab();
+}
+
+/* ============================================================================
+   7. HUNT & CATCH MECHANICS
+============================================================================ */
+const BIOMES = [
+  { id: 'volcano', name: '🌋 Пепельный Вулкан', elements: ['fire', 'earth'], desc: 'Обитель Огненных и Земляных питомцев' },
+  { id: 'ocean',   name: '🌊 Бездонный Океан',  elements: ['water', 'air'],  desc: 'Водные хищники и крылатые буревестники' },
+  { id: 'astral',  name: '✨ Астральный Храм',  elements: ['light', 'dark'], desc: 'Редкие существа Света и Тьмы' }
+];
+
+let currentWild = null;
+
+function renderHuntTab() {
+  const wrap = document.getElementById('hunt-biomes');
+  wrap.innerHTML = '';
+  BIOMES.forEach(b => {
+    const div = document.createElement('div');
+    div.className = 'biome-card';
+    div.innerHTML = `
+      <div>
+        <div style="font-weight:700; font-size:14px;">${b.name}</div>
+        <div style="font-size:11px; color:var(--text-muted);">${b.desc}</div>
+      </div>
+      <button class="btn" style="width:auto; padding:8px 14px;" onclick="exploreBiome('${b.id}')">Искать (-10 ⚡)</button>
+    `;
+    wrap.appendChild(div);
+  });
+}
+
+function exploreBiome(biomeId) {
+  if (state.energy < 10) {
+    showToast('Недостаточно энергии! Используй Тоник в Инвентаре.', '#f85149');
+    return;
+  }
+  state.energy -= 10;
+  progressQuest('q_hunt', 1);
+  haptic('medium');
+
+  const biome = BIOMES.find(b => b.id === biomeId);
+  // Roll rarity: Common 58%, Rare 26%, Epic 11%, Legendary 4%, Mythic 1%
+  const roll = Math.random() * 100;
+  let targetRarity = 'common';
+  if (roll > 99) targetRarity = 'mythic';
+  else if (roll > 95) targetRarity = 'legendary';
+  else if (roll > 84) targetRarity = 'epic';
+  else if (roll > 58) targetRarity = 'rare';
+
+  let pool = SPECIES.filter(s => biome.elements.includes(s.element) && s.rarity === targetRarity);
+  if (pool.length === 0) pool = SPECIES.filter(s => biome.elements.includes(s.element));
+  const sp = pool[Math.floor(Math.random() * pool.length)];
+
+  const avgTeamLvl = Math.max(1, Math.floor(state.pets.reduce((a, p) => a + p.level, 0) / state.pets.length));
+  const wildLvl = Math.max(1, avgTeamLvl + Math.floor(Math.random() * 5) - 2);
+
+  currentWild = { species: sp, level: wildLvl };
+  showEncounterUI();
+  saveState();
+}
+
+function showEncounterUI() {
+  const sp = currentWild.species;
+  const rar = RARITIES[sp.rarity];
+  const el = ELEMENTS[sp.element];
+
+  document.getElementById('hunt-Encounter')?. scrollIntoView();
+  const box = document.getElementById('hunt-encounter');
+  box.style.display = 'block';
+  document.getElementById('enc-rarity-tag').textContent = `${rar.name} • ${el.icon} ${el.name}`;
+  document.getElementById('enc-sprite').textContent = sp.sprites[0];
+  document.getElementById('enc-name').textContent = sp.stages[0];
+  document.getElementById('enc-meta').textContent = `Уровень ${currentWild.level} • Пассивка: ${sp.passive}`;
+
+  const cBasic = Math.min(95, Math.round(rar.catchBase * 100));
+  const cMaster = Math.min(99, Math.round(rar.catchBase * 220));
+  document.getElementById('chance-basic').textContent = `Шанс: ${cBasic}% (${state.inventory.net_basic||0} шт.)`;
+  document.getElementById('chance-master').textContent = `Шанс: ${cMaster}% (${state.inventory.net_master||0} шт.)`;
+}
+
+function closeEncounter() {
+  currentWild = null;
+  document.getElementById('hunt-encounter').style.display = 'none';
+}
+
+function attemptCatch(netKey) {
+  if (!currentWild) return;
+  if ((state.inventory[netKey] || 0) <= 0) {
+    showToast('Нет выбранной ловушки! Купи в Лавке.', '#f85149');
+    return;
+  }
+  state.inventory[netKey]--;
+  const rar = RARITIES[currentWild.species.rarity];
+  const chance = netKey === 'net_master' ? Math.min(0.99, rar.catchBase * 2.2) : rar.catchBase;
+
+  if (Math.random() <= chance) {
+    const newPet = addPetToUser(currentWild.species.id, currentWild.level, 1, 0);
+    haptic('success');
+    showToast(`🎉 ПОЙМАН: ${getPetDisplayName(newPet)} [Ур.${newPet.level}]!`);
+    closeEncounter();
+  } else {
+    haptic('error');
+    showToast('Питомец вырвался из ловушки! Попробуй ещё раз.', '#d29922');
+    showEncounterUI();
+  }
+  saveState();
+}
+
+function fightWildPet() {
+  if (!currentWild) return;
+  const sp = currentWild.species;
+  const rar = RARITIES[sp.rarity];
+  const dustReward = Math.floor(rar.dust * 0.6) + 8;
+  const expReward = currentWild.level * 35;
+
+  state.dust += dustReward;
+  state.coins += 35;
+  state.pets.filter(p => p.teamSlot > 0).forEach(p => addExpToPet(p, expReward));
+  haptic('success');
+  showToast(`⚔️ Победа! Команда получила +${expReward} EXP, +35 💰 и +${dustReward} ✨!`);
+  closeEncounter();
+  saveState();
+}
+
+/* ============================================================================
+   8. 3v3 TACTICAL BATTLE ENGINE
+============================================================================ */
+let battle = null;
+let battleTimerInt = null;
+
+function getPlayerTeam() {
+  let team = state.pets.filter(p => p.teamSlot > 0).sort((a, b) => a.teamSlot - b.teamSlot);
+  if (team.length === 0) team = state.pets.slice(0, 3);
+  return team;
+}
+
+function renderArenaTab() {
+  const preview = document.getElementById('arena-team-preview');
+  preview.innerHTML = '';
+  const team = getPlayerTeam();
+  team.forEach(p => {
+    const div = document.createElement('div');
+    div.style.cssText = 'background:var(--bg-panel); padding:10px; border-radius:12px; width:95px; border:1px solid #30363d;';
+    div.innerHTML = `
+      <div style="font-size:34px;">${getPetSprite(p)}</div>
+      <div style="font-size:11px; font-weight:700; margin-top:4px;">${getPetDisplayName(p)}</div>
+      <div style="font-size:10px; color:var(--text-muted);">Ур. ${p.level}</div>
+    `;
+    preview.appendChild(div);
+  });
+}
+
+function makeCombatant(petObj) {
+  const sp = SPECIES.find(s => s.id === petObj.speciesId);
+  const st = calcPetStats(petObj);
+  return {
+    uid: petObj.uid,
+    species: sp,
+    name: sp.stages[petObj.evo - 1],
+    sprite: sp.sprites[petObj.evo - 1],
+    element: sp.element,
+    level: petObj.level,
+    evo: petObj.evo,
+    skillLvl: petObj.skillLvl || 1,
+    maxHp: st.hp,
+    hp: st.hp,
+    atk: st.atk,
+    def: st.def,
+    spd: st.spd,
+    cdStrong: 0,
+    cdDef: 0,
+    cdS1: 0,
+    cdS2: 1, // Ульта доступна со 2 раунда
+    defending: false,
+    burnTurns: 0,
+    stunned: false,
+    shieldTurns: 0,
+    weakenedTurns: 0
+  };
+}
+
+function startArenaMatch(mode) {
+  haptic('medium');
+  const myTeamRaw = getPlayerTeam();
+  const avgLvl = Math.max(1, Math.round(myTeamRaw.reduce((a, p) => a + p.level, 0) / myTeamRaw.length));
+
+  // Generate balanced 3-pet opponent team
+  const enemyNames = ['KiberShadow', 'DragonSlayer', 'Valkyrie_RU', 'ArcaneMaster', 'DarkHunter'];
+  const enemyUser = mode === 'tourney' ? '👑 Чемпион Арены' : enemyNames[Math.floor(Math.random() * enemyNames.length)];
+
+  const enemyTeam = [];
+  for (let i = 0; i < 3; i++) {
+    const randSp = SPECIES[Math.floor(Math.random() * SPECIES.length)];
+    const eLvl = Math.max(1, avgLvl + (mode === 'tourney' ? 3 : Math.floor(Math.random() * 3) - 1));
+    const eEvo = eLvl >= 35 ? 3 : (eLvl >= 15 ? 2 : 1);
+    enemyTeam.push(makeCombatant({ uid: 900 + i, speciesId: randSp.id, level: eLvl, evo: eEvo, skillLvl: 1 }));
+  }
+
+  battle = {
+    mode,
+    round: 1,
+    enemyName: enemyUser,
+    pTeam: myTeamRaw.map(makeCombatant),
+    eTeam: enemyTeam,
+    pIdx: 0,
+    eIdx: 0,
+    timer: 25,
+    busy: false
+  };
+
+  document.getElementById('battle-screen').classList.add('active');
+  document.getElementById('b-log').innerHTML = `⚔️ Бой против <b>${enemyUser}</b> начался! Выбери действие.`;
+  updateBattleUI();
+  startTurnTimer();
+}
+
+function startTurnTimer() {
+  clearInterval(battleTimerInt);
+  if (!battle) return;
+  battle.timer = 25;
+  document.getElementById('b-timer').textContent = battle.timer;
+  battleTimerInt = setInterval(() => {
+    if (!battle || battle.busy) return;
+    battle.timer--;
+    document.getElementById('b-timer').textContent = battle.timer;
+    if (battle.timer <= 0) {
+      executeBattleTurn('normal');
+    }
+  }, 1000);
+}
+
+function getElementMultiplier(atkElem, defElem) {
+  if (ELEMENTS[atkElem].strong === defElem) return 1.3;
+  if (ELEMENTS[atkElem].weak === defElem) return 0.75;
+  return 1.0;
+}
+
+function updateBattleUI() {
+  if (!battle) return;
+  const p = battle.pTeam[battle.pIdx];
+  const e = battle.eTeam[battle.eIdx];
+
+  document.getElementById('b-round-num').textContent = battle.round;
+  document.getElementById('b-enemy-name').textContent = `${ELEMENTS[e.element].icon} ${e.name} (${battle.enemyName})`;
+  document.getElementById('b-enemy-lvl').textContent = `Ур. ${e.level}`;
+  document.getElementById('b-enemy-sprite').textContent = e.sprite;
+  document.getElementById('b-enemy-petname').textContent = e.name;
+  document.getElementById('b-enemy-hp-bar').style.width = `${Math.max(0, Math.floor((e.hp / e.maxHp) * 100))}%`;
+  document.getElementById('b-enemy-hp-text').textContent = `${Math.max(0, e.hp)} / ${e.maxHp}`;
+
+  document.getElementById('b-player-title').textContent = `${ELEMENTS[p.element].icon} ${p.name}`;
+  document.getElementById('b-player-lvl').textContent = `Ур. ${p.level}`;
+  document.getElementById('b-player-sprite').textContent = p.sprite;
+  document.getElementById('b-player-petname').textContent = p.name;
+  document.getElementById('b-player-hp-bar').style.width = `${Math.max(0, Math.floor((p.hp / p.maxHp) * 100))}%`;
+  document.getElementById('b-player-hp-text').textContent = `${Math.max(0, p.hp)} / ${p.maxHp}`;
+
+  // Balls
+  document.getElementById('b-enemy-balls').innerHTML = battle.eTeam.map(x => `<div class="ball ${x.hp<=0?'dead':''}"></div>`).join('');
+  document.getElementById('b-player-balls').innerHTML = battle.pTeam.map(x => `<div class="ball ${x.hp<=0?'dead':''}"></div>`).join('');
+
+  // Statuses
+  const renderStatPills = (unit) => {
+    const arr = [];
+    if (unit.burnTurns > 0) arr.push(`<span class="s-pill">🔥 Ожог (${unit.burnTurns})</span>`);
+    if (unit.shieldTurns > 0) arr.push(`<span class="s-pill">🛡 Щит (${unit.shieldTurns})</span>`);
+    if (unit.weakenedTurns > 0) arr.push(`<span class="s-pill">📉 Ослаблен</span>`);
+    if (unit.stunned) arr.push(`<span class="s-pill">💫 Оглушён</span>`);
+    return arr.join('');
+  };
+  document.getElementById('b-enemy-statuses').innerHTML = renderStatPills(e);
+  document.getElementById('b-player-statuses').innerHTML = renderStatPills(p);
+
+  // Effectiveness badge
+  const elemMult = getElementMultiplier(p.element, e.element);
+  const effHtml = elemMult > 1 ? `<span class="eff-tag eff-up">x1.3 Эффект!</span>` : (elemMult < 1 ? `<span class="eff-tag eff-down">x0.75 Слабо</span>` : '');
+
+  const aliveBench = battle.pTeam.filter((x, idx) => idx !== battle.pIdx && x.hp > 0).length;
+
+  const ctrl = document.getElementById('b-controls');
+  ctrl.innerHTML = `
+    <button class="act-btn" onclick="executeBattleTurn('normal')">
+      ${effHtml}
+      <span>🗡 Обычная атака</span>
+      <span class="sub">100% урон • Точн. 95%</span>
+    </button>
+    <button class="act-btn" onclick="executeBattleTurn('strong')" ${p.cdStrong > 0 ? 'disabled' : ''}>
+      ${effHtml}
+      <span>💥 Сильная атака</span>
+      <span class="sub">${p.cdStrong > 0 ? `КД: ${p.cdStrong} х.` : '145% урон • Точн. 75%'}</span>
+    </button>
+    <button class="act-btn" onclick="executeBattleTurn('s1')" ${p.cdS1 > 0 ? 'disabled' : ''}>
+      ${effHtml}
+      <span>🔥 ${p.species.s1.name}</span>
+      <span class="sub">${p.cdS1 > 0 ? `КД: ${p.cdS1} х.` : p.species.s1.desc}</span>
+    </button>
+    <button class="act-btn" onclick="executeBattleTurn('s2')" ${(p.cdS2 > 0 || p.evo < 2) ? 'disabled' : ''}>
+      ${effHtml}
+      <span>🌋 ${p.species.s2.name}</span>
+      <span class="sub">${p.evo < 2 ? 'Нужна Эво II' : (p.cdS2 > 0 ? `КД: ${p.cdS2} х.` : p.species.s2.desc)}</span>
+    </button>
+    <button class="act-btn" onclick="executeBattleTurn('defend')" ${p.cdDef > 0 ? 'disabled' : ''}>
+      <span>🛡 Защита</span>
+      <span class="sub">${p.cdDef > 0 ? `КД: ${p.cdDef} х.` : '-60% урона в этот ход'}</span>
+    </button>
+    <button class="act-btn" onclick="executeBattleTurn('swap')" ${aliveBench === 0 ? 'disabled' : ''}>
+      <span>🔄 Смена (${aliveBench} в запасе)</span>
+      <span class="sub">Выпустить другого питомца</span>
+    </button>
+  `;
+}
+
+function showFloatingText(isEnemyTarget, text, color = '#ff5555') {
+  const container = document.getElementById(isEnemyTarget ? 'b-enemy-fighter' : 'b-player-fighter');
+  container.classList.remove('hit');
+  void container.offsetWidth;
+  container.classList.add('hit');
+
+  const floatEl = document.createElement('div');
+  floatEl.className = 'floating-dmg';
+  floatEl.style.color = color;
+  floatEl.textContent = text;
+  container.appendChild(floatEl);
+  setTimeout(() => floatEl.remove(), 950);
+}
+
+function chooseEnemyAction(e, p) {
+  if (e.cdS2 === 0 && e.evo >= 2) return 's2';
+  if (e.cdS1 === 0 && Math.random() < 0.75) return 's1';
+  if (e.hp < e.maxHp * 0.3 && e.cdDef === 0 && Math.random() < 0.5) return 'defend';
+  if (e.cdStrong === 0 && Math.random() < 0.4) return 'strong';
+  return 'normal';
+}
+
+function performSingleAction(attacker, defender, action, isPlayerActor, logs) {
+  if (attacker.hp <= 0) return;
+
+  if (attacker.stunned) {
+    attacker.stunned = false;
+    logs.push(`💫 <b>${attacker.name}</b> оглушён и пропускает ход!`);
+    return;
+  }
+
+  if (action === 'defend') {
+    attacker.defending = true;
+    attacker.cdDef = 2;
+    logs.push(`🛡 <b>${attacker.name}</b> встаёт в глухую защиту (-60% урона)!`);
+    showFloatingText(!isPlayerActor, '🛡 ЗАЩИТА', '#58a6ff');
+    return;
+  }
+
+  // Accuracy & Multiplier
+  let mult = 1.0;
+  let acc = 0.95;
+  let effect = null;
+  let actionTitle = 'Обычная атака';
+
+  if (action === 'strong') {
+    mult = 1.45; acc = 0.75; attacker.cdStrong = 2; actionTitle = 'Сильная атака';
+  } else if (action === 's1') {
+    mult = attacker.species.s1.mult * (1 + (attacker.skillLvl - 1) * 0.05);
+    acc = 0.95; attacker.cdS1 = attacker.species.s1.cd + 1;
+    effect = attacker.species.s1.effect; actionTitle = attacker.species.s1.name;
+  } else if (action === 's2') {
+    mult = attacker.species.s2.mult * (1 + (attacker.skillLvl - 1) * 0.05);
+    acc = 0.92; attacker.cdS2 = attacker.species.s2.cd + 1;
+    effect = attacker.species.s2.effect; actionTitle = attacker.species.s2.name;
+  }
+
+  if (Math.random() > acc) {
+    logs.push(`💨 <b>${attacker.name}</b> использует [${actionTitle}], но промахивается!`);
+    showFloatingText(isPlayerActor, 'ПРОМАХ!', '#8b949e');
+    return;
+  }
+
+  // Exact GDD Formula: BaseAtk * (100 / (100 + TargetDef)) * M_skill * M_elem * M_crit * M_def * R
+  const effAtk = attacker.atk * (attacker.weakenedTurns > 0 ? 0.8 : 1.0);
+  const elemMult = getElementMultiplier(attacker.element, defender.element);
+
+  const spdDiff = Math.max(0, attacker.spd - defender.spd);
+  const critChance = Math.min(0.25, 0.10 + Math.floor(spdDiff / 20) * 0.02 + (effect === 'crit_guarantee' ? 0.5 : 0));
+  const isCrit = !defender.defending && Math.random() < critChance;
+  const critMult = isCrit ? 1.5 : 1.0;
+
+  const defMult = defender.defending ? 0.4 : (defender.shieldTurns > 0 ? 0.7 : 1.0);
+  const randSpread = 0.95 + Math.random() * 0.10;
+
+  let dmg = Math.floor(effAtk * (100 / (100 + defender.def)) * mult * elemMult * critMult * defMult * randSpread);
+  dmg = Math.max(1, dmg);
+
+  defender.hp = Math.max(0, defender.hp - dmg);
+  haptic(isCrit ? 'heavy' : 'medium');
+
+  const tag = isCrit ? `💥 -${dmg} КРИТ!` : `-${dmg}`;
+  showFloatingText(isPlayerActor, tag, isCrit ? '#f0883e' : '#ff5555');
+
+  let logLine = `${ELEMENTS[attacker.element].icon} <b>${attacker.name}</b> [${actionTitle}] ➔ <b>${dmg}</b> ур.`;
+  if (isCrit) logLine += ' <b>(КРИТ!)</b>';
+  if (elemMult > 1) logLine += ' <i>(Стихия x1.3)</i>';
+
+  // Apply secondary skill effects
+  if (effect === 'burn') { defender.burnTurns = 2; logLine += ' + 🔥 Ожог!'; }
+  if (effect === 'stun' && Math.random() < 0.38) { defender.stunned = true; logLine += ' + 💫 Оглушение!'; }
+  if (effect === 'heal') {
+    const heal = Math.floor(attacker.maxHp * 0.18);
+    attacker.hp = Math.min(attacker.maxHp, attacker.hp + heal);
+    logLine += ` + 💚 Лечение ${heal} HP!`;
+  }
+  if (effect === 'vamp') {
+    const vamp = Math.floor(dmg * 0.35);
+    attacker.hp = Math.min(attacker.maxHp, attacker.hp + vamp);
+    logLine += ` + 🩸 Вампиризм ${vamp} HP!`;
+  }
+  if (effect === 'shield') { attacker.shieldTurns = 2; logLine += ' + 🛡 Щит!'; }
+  if (effect === 'weaken') { defender.weakenedTurns = 2; logLine += ' + 📉 Ослабление!'; }
+
+  logs.push(logLine);
+}
+
+function tickTurnEndUnit(u, logs) {
+  u.defending = false;
+  if (u.cdStrong > 0) u.cdStrong--;
+  if (u.cdDef > 0) u.cdDef--;
+  if (u.cdS1 > 0) u.cdS1--;
+  if (u.cdS2 > 0) u.cdS2--;
+  if (u.shieldTurns > 0) u.shieldTurns--;
+  if (u.weakenedTurns > 0) u.weakenedTurns--;
+
+  if (u.hp > 0 && u.burnTurns > 0) {
+    const bDmg = Math.max(1, Math.floor(u.maxHp * 0.07));
+    u.hp = Math.max(0, u.hp - bDmg);
+    u.burnTurns--;
+    logs.push(`🔥 <b>${u.name}</b> теряет ${bDmg} HP от ожога.`);
+  }
+}
+
+function executeBattleTurn(playerAction) {
+  if (!battle || battle.busy) return;
+  battle.busy = true;
+
+  let p = battle.pTeam[battle.pIdx];
+  let e = battle.eTeam[battle.eIdx];
+  const eAction = chooseEnemyAction(e, p);
+  const logs = [];
+
+  // Priority 1: Swap or Defend
+  if (playerAction === 'swap') {
+    const nextIdx = battle.pTeam.findIndex((x, idx) => idx !== battle.pIdx && x.hp > 0);
+    if (nextIdx !== -1) {
+      battle.pIdx = nextIdx;
+      p = battle.pTeam[battle.pIdx];
+      logs.push(`🔄 Ты выпускаешь на арену <b>${p.name}</b>!`);
+    }
+  }
+  if (playerAction === 'defend') performSingleAction(p, e, 'defend', true, logs);
+  if (eAction === 'defend') performSingleAction(e, p, 'defend', false, logs);
+
+  // Priority 2: Speed check for attacks
+  const pAttacks = !['swap', 'defend'].includes(playerAction);
+  const eAttacks = eAction !== 'defend';
+
+  if (p.spd >= e.spd) {
+    if (pAttacks) performSingleAction(p, e, playerAction, true, logs);
+    if (e.hp > 0 && eAttacks) performSingleAction(e, p, eAction, false, logs);
+  } else {
+    if (eAttacks) performSingleAction(e, p, eAction, false, logs);
+    if (p.hp > 0 && pAttacks) performSingleAction(p, e, playerAction, true, logs);
+  }
+
+  // End of round status ticks
+  tickTurnEndUnit(p, logs);
+  tickTurnEndUnit(e, logs);
+
+  // Check knocked out pets
+  if (e.hp <= 0) {
+    logs.push(`💀 <b>${e.name}</b> соперника повержен!`);
+    const nextE = battle.eTeam.findIndex(x => x.hp > 0);
+    if (nextE === -1) {
+      finishBattle(true, logs);
+      return;
+    } else {
+      battle.eIdx = nextE;
+      logs.push(`▶️ Соперник выпускает <b>${battle.eTeam[nextE].name}</b>!`);
+    }
+  }
+
+  if (p.hp <= 0) {
+    logs.push(`💀 Твой <b>${p.name}</b> повержен!`);
+    const nextP = battle.pTeam.findIndex(x => x.hp > 0);
+    if (nextP === -1) {
+      finishBattle(false, logs);
+      return;
+    } else {
+      battle.pIdx = nextP;
+      logs.push(`▶️ На поле выходит <b>${battle.pTeam[nextP].name}</b>!`);
+    }
+  }
+
+  battle.round++;
+  document.getElementById('b-log').innerHTML = logs.join('<br>');
+  battle.busy = false;
+  updateBattleUI();
+  startTurnTimer();
+}
+
+function finishBattle(isWin, logs) {
+  clearInterval(battleTimerInt);
+  updateBattleUI();
+
+  if (isWin) {
+    const eloGain = battle.mode === 'ranked' ? 25 : (battle.mode === 'tourney' ? 40 : 0);
+    const coinGain = battle.mode === 'tourney' ? 180 : 85;
+    state.elo += eloGain;
+    state.coins += coinGain;
+    state.wins++;
+    state.exp += 40;
+    if (state.exp >= state.level * 100) { state.level++; state.exp = 0; }
+    state.pets.filter(x => x.teamSlot > 0).forEach(pet => addExpToPet(pet, 90));
+    progressQuest('q_pvp', 1);
+    haptic('success');
+    showToast(`🏆 ПОБЕДА! +${coinGain} 💰 ${eloGain ? `и +${eloGain} ELO!` : ''}`);
+  } else {
+    const eloLoss = battle.mode === 'ranked' ? 18 : 0;
+    state.elo = Math.max(800, state.elo - eloLoss);
+    state.losses++;
+    state.coins += 20;
+    haptic('error');
+    showToast(`Поражение! Утешительная награда +20 💰`, '#f85149');
+  }
+
+  saveState();
+  setTimeout(() => {
+    document.getElementById('battle-screen').classList.remove('active');
+    battle = null;
+    renderArenaTab();
+  }, 1400);
+}
+
+/* ============================================================================
+   9. MARKET, AUCTION & ESCROW GUARANTOR
+============================================================================ */
+function switchMarketSub(sub, btn) {
+  haptic('light');
+  btn.parentElement.querySelectorAll('.sub-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('market-sub-shop').style.display = sub === 'shop' ? 'block' : 'none';
+  document.getElementById('market-sub-p2p').style.display = sub === 'p2p' ? 'block' : 'none';
+  document.getElementById('market-sub-escrow').style.display = sub === 'escrow' ? 'block' : 'none';
+  renderMarketTab();
+}
+
+function renderMarketTab() {
+  // 1. Shop
+  const shopEl = document.getElementById('shop-items-list');
+  shopEl.innerHTML = '';
+  Object.keys(ITEMS_CATALOG).forEach(key => {
+    const item = ITEMS_CATALOG[key];
+    const div = document.createElement('div');
+    div.className = 'biome-card';
+    div.innerHTML = `
+      <div>
+        <div style="font-weight:700; font-size:14px;">${item.name}</div>
+        <div style="font-size:11px; color:var(--text-muted);">${item.desc} • У тебя: ${state.inventory[key]||0}</div>
+      </div>
+      <button class="btn btn-warning" style="width:auto; padding:8px 14px;" onclick="buyShopItem('${key}')">${item.price} 💰</button>
+    `;
+    shopEl.appendChild(div);
+  });
+
+  // 2. P2P Market
+  const listEl = document.getElementById('market-listings');
+  listEl.innerHTML = '';
+  state.marketListings.forEach(lot => {
+    const sp = SPECIES.find(s => s.id === lot.speciesId);
+    const rar = RARITIES[sp.rarity];
+    const div = document.createElement('div');
+    div.className = 'biome-card';
+    div.innerHTML = `
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div style="font-size:32px;">${sp.sprites[lot.evo-1]}</div>
+        <div>
+          <div style="font-weight:700; font-size:14px;">${sp.stages[lot.evo-1]} <span style="font-size:11px; color:var(--accent)">[Ур.${lot.level}]</span></div>
+          <div style="font-size:11px; color:var(--text-muted);">${rar.name} • Продавец: @${lot.seller}</div>
+        </div>
+      </div>
+      <button class="btn btn-success" style="width:auto; padding:8px 14px;" onclick="buyMarketLot(${lot.id})">${lot.price} 💰</button>
+    `;
+    listEl.appendChild(div);
+  });
+
+  // 3. Escrow select
+  const sel = document.getElementById('escrow-my-pet');
+  sel.innerHTML = '';
+  state.pets.filter(p => p.teamSlot === 0).forEach(p => {
+    const sp = SPECIES.find(s => s.id === p.speciesId);
+    const opt = document.createElement('option');
+    opt.value = p.uid;
+    opt.textContent = `${getPetDisplayName(p)} [Ур.${p.level} | ${RARITIES[sp.rarity].name}]`;
+    sel.appendChild(opt);
+  });
+  if (sel.options.length === 0) {
+    sel.innerHTML = `<option value="">Нет свободных питомцев в запасе (вне боевой команды)</option>`;
+  }
+}
+
+function buyShopItem(key) {
+  const item = ITEMS_CATALOG[key];
+  if (state.coins < item.price) {
+    showToast('Недостаточно монет!', '#f85149');
+    return;
+  }
+  state.coins -= item.price;
+  state.inventory[key] = (state.inventory[key] || 0) + 1;
+  haptic('success');
+  showToast(`Куплено: ${item.name}!`);
+  saveState();
+  renderMarketTab();
+}
+
+function buyMarketLot(lotId) {
+  const lot = state.marketListings.find(l => l.id === lotId);
+  if (!lot) return;
+  if (state.coins < lot.price) {
+    showToast('Не хватает монет для покупки лота!', '#f85149');
+    return;
+  }
+  state.coins -= lot.price;
+  addPetToUser(lot.speciesId, lot.level, lot.evo, 0);
+  state.marketListings = state.marketListings.filter(l => l.id !== lotId);
+  haptic('success');
+  showToast('🎉 Питомец куплен через гаранта и отправлен в Питомник!');
+  saveState();
+  renderMarketTab();
+}
+
+function openSellModal() {
+  const bench = state.pets.filter(p => p.teamSlot === 0);
+  if (bench.length === 0) {
+    showToast('Сначала убери питомца из боевой тройки в запас!', '#d29922');
+    return;
+  }
+  const pet = bench[0];
+  const sp = SPECIES.find(s => s.id === pet.speciesId);
+  const price = RARITIES[sp.rarity].floorPrice + pet.level * 15;
+  const tax = Math.floor(price * 0.10);
+  const net = price - tax;
+
+  if (confirm(`Выставить и мгновенно продать на рынке ${getPetDisplayName(pet)} [Ур.${pet.level}] за ${price} 💰 (с учётом 10% комиссии рынка получишь ${net} 💰)?`)) {
+    state.pets = state.pets.filter(p => p.uid !== pet.uid);
+    state.coins += net;
+    haptic('success');
+    showToast(`Продано на рынке! Получено +${net} 💰`);
+    saveState();
+    renderMarketTab();
+  }
+}
+
+function executeSafeTrade() {
+  const uid = Number(document.getElementById('escrow-my-pet').value);
+  const myPet = state.pets.find(p => p.uid === uid);
+  if (!myPet) {
+    showToast('Выбери питомца из запаса для обмена!', '#f85149');
+    return;
+  }
+  const sp = SPECIES.find(s => s.id === myPet.speciesId);
+  if (sp.rarity === 'common' && myPet.level < 12) {
+    haptic('error');
+    showToast('🛡 Анти-абьюз Гарант: ценность твоего питомца слишком мала для обмена на Редкого 15 ур.!', '#f85149');
+    return;
+  }
+  state.pets = state.pets.filter(p => p.uid !== uid);
+  addPetToUser(2, 15, 2, 0);
+  haptic('success');
+  showToast('🤝 Обмен через Гаранта успешно завершён!');
+  saveState();
+  renderMarketTab();
+}
+
+/* ============================================================================
+   10. QUESTS, LEADERBOARD & ENERGY REGEN
+============================================================================ */
+function progressQuest(qId, val) {
+  const q = state.quests.find(x => x.id === qId);
+  if (q && !q.claimed) {
+    q.cur = Math.min(q.max, q.cur + val);
+  }
+}
+
+function claimQuest(qId) {
+  const q = state.quests.find(x => x.id === qId);
+  if (!q || q.claimed || q.cur < q.max) return;
+  q.claimed = true;
+  state.coins += q.rewardCoins;
+  haptic('success');
+  showToast(`Награда получена: +${q.rewardCoins} 💰!`);
+  saveState();
+  renderProfileTab();
+}
+
+function renderProfileTab() {
+  const qList = document.getElementById('quests-list');
+  qList.innerHTML = '';
+  state.quests.forEach(q => {
+    const done = q.cur >= q.max;
+    const div = document.createElement('div');
+    div.className = 'biome-card';
+    div.style.marginBottom = '0';
+    div.innerHTML = `
+      <div>
+        <div style="font-size:13px; font-weight:700;">${q.title} (${q.cur}/${q.max})</div>
+        <div style="font-size:11px; color:var(--warning);">Награда: ${q.rewardCoins} 💰</div>
+      </div>
+      <button class="btn ${done && !q.claimed ? 'btn-success' : 'btn-outline'}" style="width:auto; padding:6px 12px;"
+        ${(!done || q.claimed) ? 'disabled' : ''} onclick="claimQuest('${q.id}')">
+        ${q.claimed ? 'Получено' : 'Забрать'}
+      </button>
+    `;
+    qList.appendChild(div);
+  });
+
+  const lb = [
+    { name: 'ImmortalKing', elo: 1620 },
+    { name: 'Valkyrie_RU', elo: 1480 },
+    { name: 'PhoenixMaster', elo: 1310 },
+    { name: state.username + ' (Ты)', elo: state.elo, me: true },
+    { name: 'NewbieHunter', elo: 960 }
+  ].sort((a, b) => b.elo - a.elo);
+
+  const lbEl = document.getElementById('leaderboard-list');
+  lbEl.innerHTML = lb.map((row, idx) => `
+    <div style="display:flex; justify-content:space-between; padding:8px 10px; border-radius:8px; background:${row.me ? 'rgba(88,166,255,0.18)' : 'var(--bg-panel)'};">
+      <span><b>#${idx + 1}</b> ${row.name}</span>
+      <span style="color:var(--warning); font-weight:700;">🏆 ${row.elo}</span>
+    </div>
+  `).join('');
+}
+
+// Passive Energy Regeneration
+setInterval(() => {
+  if (state.energy < state.maxEnergy) {
+    state.energy++;
+    saveState();
+  }
+}, 60000);
+
+// Startup
+loadState();
+renderPetsTab();
+</script>
+</body>
+  </html>
